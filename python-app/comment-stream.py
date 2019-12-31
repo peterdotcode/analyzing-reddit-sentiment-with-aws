@@ -5,12 +5,9 @@ import datetime
 import sys
 import boto3
 import json
-import time
 import logging
-import pandas as pd
 from textblob import TextBlob
-from textblob import Blobber
-from better_profanity import profanity
+import profanity
 
 comment_stream = '<insert-comment-stream-name>'
 phrases_stream = '<insert-phrase-stream-name>'
@@ -69,7 +66,7 @@ def entity_extraction(comments, date, subreddit, commentID, entity_stream, phras
         comprehended['Score'] = i['Score']
         comprehended['Method'] = 'key_phrases'
         print(comprehended)
-        process_or_store(comprehended, phrases_stream)
+        #process_or_store(comprehended, phrases_stream)
 
     # entity data preparation and handling
     for e in entity['Entities']:
@@ -77,7 +74,7 @@ def entity_extraction(comments, date, subreddit, commentID, entity_stream, phras
         comprehended['Text'] = e['Text']
         comprehended['Score'] = e['Score']
         comprehended['Method'] = 'entities'
-        process_or_store(comprehended,entity_stream)
+        #process_or_store(comprehended,entity_stream)
 
 
 firehose_client = boto3.client('firehose', region_name="us-east-1")
@@ -123,7 +120,8 @@ if len(sys.argv) >= 2:
             num_comments_collected = num_comments_collected + 1
             print(num_comments_collected)
             print(commentjson)
-            process_or_store(commentjson, comment_stream)
+            #process_or_store(commentjson, comment_stream)
+            entity_extraction(cleaned_comment, comment_date, comment.subreddit, comment.id, entity_stream, phrases_stream)
     except Exception as e:
         print(e)
 else:
