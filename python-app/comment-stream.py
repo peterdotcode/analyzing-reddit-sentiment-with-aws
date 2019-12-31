@@ -7,7 +7,7 @@ import boto3
 import json
 import logging
 from textblob import TextBlob
-import profanity
+from profanity import profanity
 
 comment_stream = '<insert-comment-stream-name>'
 phrases_stream = '<insert-phrase-stream-name>'
@@ -65,8 +65,8 @@ def entity_extraction(comments, date, subreddit, commentID, entity_stream, phras
         comprehended['Text'] = i['Text']
         comprehended['Score'] = i['Score']
         comprehended['Method'] = 'key_phrases'
-        print(comprehended)
-        #process_or_store(comprehended, phrases_stream)
+        #print(comprehended)
+        process_or_store(comprehended, phrases_stream)
 
     # entity data preparation and handling
     for e in entity['Entities']:
@@ -74,7 +74,8 @@ def entity_extraction(comments, date, subreddit, commentID, entity_stream, phras
         comprehended['Text'] = e['Text']
         comprehended['Score'] = e['Score']
         comprehended['Method'] = 'entities'
-        #process_or_store(comprehended,entity_stream)
+        process_or_store(comprehended,entity_stream)
+        #print(comprehended)
 
 
 firehose_client = boto3.client('firehose', region_name="us-east-1")
