@@ -8,10 +8,13 @@ import json
 import time
 import logging
 import pandas as pd
-import ast
 from textblob import TextBlob
 from textblob import Blobber
 from better_profanity import profanity
+
+comment_stream = '<insert-comment-stream-name>'
+phrases_stream = '<insert-phrase-stream-name>'
+entity_stream = '<insert-phrase-stream-name>'
 
 def remove_emoji(comment):
     emoji_pattern = re.compile("["
@@ -31,11 +34,10 @@ def get_comment_sentiment(comment):
     pattern_analysis = TextBlob(comment)
     return pattern_analysis.sentiment
 
-
-def process_or_store(comment):
+def process_or_store(comment,stream):
     try:
         response = firehose_client.put_record(
-            DeliveryStreamName='reddit-kibana',
+            DeliveryStreamName=stream,
             Record={
                 'Data': (json.dumps(comment, ensure_ascii=False) + '\n').encode('utf8')
                     }
@@ -44,8 +46,41 @@ def process_or_store(comment):
     except Exception:
         logging.exception("Problem pushing to firehose")
 
+def entity_extraction(comments, date, subreddit, commentID, entity_stream, phrases_stream):
+    comprehend = boto3.client(service_name='comprehend', region_name='us-east-1')
+    phrases = comprehend.detect_key_phrases(Text=comments, LanguageCode='en')
+    entity = comprehend.detect_entities(Text=comments, LanguageCode='en')
 
-firehose_client = boto3.client('firehose', region_name="us-west-2")
+    comprehended = {
+        '@timestamp': date,
+        'commentid': commentID,
+        'Text': "",
+        'subreddit': subreddit,
+        'Score': 0,
+        'BeginOffset': 0,
+        'EndOffset': 0,
+        'Type': "",
+        'Method': "",
+    }
+    # keyphrases data preparation and handling
+    for i in phrases ['KeyPhrases']:
+        comprehended['Type'] = "KEYPHRASES"
+        comprehended['Text'] = i['Text']
+        comprehended['Score'] = i['Score']
+        comprehended['Method'] = 'key_phrases'
+        print(comprehended)
+        process_or_store(comprehended, phrases_stream)
+
+    # entity data preparation and handling
+    for e in entity['Entities']:
+        comprehended['Type'] = e['Type']
+        comprehended['Text'] = e['Text']
+        comprehended['Score'] = e['Score']
+        comprehended['Method'] = 'entities'
+        process_or_store(comprehended,entity_stream)
+
+
+firehose_client = boto3.client('firehose', region_name="us-east-1")
 LOG_FILENAME = '/tmp/reddit-stream.log'
 logging.basicConfig(filename=LOG_FILENAME,level=logging.DEBUG)
 
@@ -74,23 +109,22 @@ if len(sys.argv) >= 2:
 
 
             commentjson = {
-            			  '@timestamp' : comment_date,
-                          'comment_id': comment.id,
+            			   '@timestamp' : comment_date,
+                           'comment_id': comment.id,
                            'subreddit': str(comment.subreddit),
                            'comment_body': cleaned_comment,
                            'comment_distinguished': comment.distinguished,
                            'comment_is_submitter': comment.is_submitter,
                            'comment_tb_sentiment': pattern_polarity,
                            'comment_is_censored': is_censored,
-		           'author_name': str(comment.author.name)
+		                   'author_name': str(comment.author.name)
                            }
             print("==================================")
             num_comments_collected = num_comments_collected + 1
             print(num_comments_collected)
             print(commentjson)
-            process_or_store(commentjson)
+            process_or_store(commentjson, comment_stream)
     except Exception as e:
         print(e)
 else:
     print("please enter subreddit.")
-
